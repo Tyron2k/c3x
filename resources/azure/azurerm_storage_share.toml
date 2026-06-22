@@ -1,0 +1,19 @@
+kind         = "azurerm_storage_share"
+display_name = "Azure Files Share"
+provider     = "azure"
+
+# STATIC: standard transaction-optimized file storage is
+# $0.06/GiB-month used; premium provisioned is $0.16/GiB.
+
+[[dimensions]]
+id       = "capacity"
+label    = "File share capacity"
+unit     = "GiB-month"
+quantity = "default(quota, 100)"
+rate     = 'default(access_tier, "TransactionOptimized") == "Premium" ? 0.16 : 0.06'
+
+[fixture]
+attributes = { quota = 100 }
+expected_monthly_cost = 6
+exact = true
+last_verified = "2026-06-10"

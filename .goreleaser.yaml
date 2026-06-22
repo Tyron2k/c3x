@@ -1,0 +1,117 @@
+# goreleaser configuration for c3x.
+#
+# Local dry-run (no publishing):
+#   go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean
+# Config check:
+#   go run github.com/goreleaser/goreleaser/v2@latest check
+#
+# Real releases run from .github/workflows/release.yml on v* tags.
+version: 2
+
+project_name: c3x
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: c3x
+    main: ./cmd/c3x
+    binary: c3x
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # Windows/arm64 has negligible Terraform-CLI usage; skip to
+      # halve the Windows build time.
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: c3x
+    ids: [c3x]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ .Tag }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+# Homebrew cask (the current goreleaser-recommended channel for CLI
+# binaries; replaces the deprecated `brews` formula stanza).
+# Requires the c3xdev/homebrew-c3x repo and a TAP_GITHUB_TOKEN
+# secret with push access. Skipped automatically on snapshots.
+homebrew_casks:
+  - name: c3x
+    repository:
+      owner: c3xdev
+      name: homebrew-c3x
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://c3x.dev
+    description: "Cloud cost estimation for Terraform & CloudFormation. No API key, no SaaS."
+    license: Apache-2.0
+
+# Docker images: dockers_v2 builds the multi-arch manifest natively
+# (no per-arch image + manifest stitching needed).
+dockers_v2:
+  - id: c3x
+    images:
+      - "ghcr.io/c3xdev/c3x"
+    tags:
+      - "{{ .Version }}"
+      - "latest"
+    dockerfile: Dockerfile.release
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.source: "https://github.com/c3xdev/c3x"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.licenses: "Apache-2.0"
+
+release:
+  github:
+    owner: c3xdev
+    name: c3x
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Install
+
+    ```bash
+    brew install c3xdev/c3x/c3x
+    go install github.com/c3xdev/c3x/cmd/c3x@{{ .Tag }}
+    docker pull ghcr.io/c3xdev/c3x:{{ .Version }}
+    ```

@@ -1,0 +1,25 @@
+kind         = "azurerm_stream_analytics_job"
+display_name = "Azure Stream Analytics Job"
+provider     = "azure"
+
+# Dedicated tier streaming units, $0.11/SU-hour.
+
+[mappings.su]
+service        = "Stream Analytics"
+product_family = "Analytics"
+attribute_filters = [
+  { key = "skuName",   const = "Dedicated" },
+  { key = "meterName", const = "Dedicated Streaming Unit" },
+]
+
+[[dimensions]]
+id       = "streaming_units"
+label    = "Streaming units"
+unit     = "SU-hours"
+quantity = "default(streaming_units, 1) * monthly_hours()"
+rate     = 'price("su")'
+
+[fixture]
+attributes = { streaming_units = 3 }
+expected_monthly_cost = 240.9
+tolerance = 0.05

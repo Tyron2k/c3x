@@ -1,0 +1,88 @@
+# Composite GitHub Action: install c3x and (optionally) run an
+# estimate + PR comment in one step.
+#
+# Usage (after the repo is public):
+#
+#   - uses: c3xdev/c3x@v0
+#     with:
+#       path: plan.json          # or a Terraform directory
+#       comment: true            # post/update the PR comment
+#       budget: "1000"           # optional gate
+#
+# Or install-only (run c3x yourself afterwards):
+#
+#   - uses: c3xdev/c3x@v0
+#     with:
+#       install-only: true
+#   - run: c3x estimate --path .
+name: c3x
+description: >-
+  Cloud cost estimation for Terraform & CloudFormation. Installs the
+  c3x CLI and optionally runs an estimate, posts a PR comment, and
+  enforces a budget gate. No API key required.
+branding:
+  icon: dollar-sign
+  color: blue
+
+inputs:
+  version:
+    description: c3x version to install (e.g. v0.1.0). "latest" resolves the newest release.
+    default: latest
+  install-only:
+    description: Only install the binary; skip the estimate.
+    default: "false"
+  path:
+    description: Terraform directory, plan JSON, or CloudFormation template.
+    default: "."
+  comment:
+    description: Post/update the cost comment on the current PR (needs pull-requests write).
+    default: "true"
+  budget:
+    description: Fail when the monthly total exceeds this amount (0 disables).
+    default: "0"
+  format:
+    description: Output format for the workflow log (text, markdown, json, junit, html, csv, sarif).
+    default: text
+  currency:
+    description: Display currency (USD, EUR, GBP, ...).
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install c3x
+      shell: bash
+      run: |
+        set -euo pipefail
+        VERSION="${{ inputs.version }}"
+        if [ "$VERSION" = "latest" ]; then
+          VERSION=$(curl -fsSL https://api.github.com/repos/c3xdev/c3x/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+        fi
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m); case "$ARCH" in x86_64) ARCH=amd64;; aarch64|arm64) ARCH=arm64;; esac
+        URL="https://github.com/c3xdev/c3x/releases/download/${VERSION}/c3x_${VERSION#v}_${OS}_${ARCH}.tar.gz"
+        echo "Installing c3x ${VERSION} (${OS}/${ARCH})"
+        curl -fsSL "$URL" | tar -xz -C /tmp c3x
+        sudo install /tmp/c3x /usr/local/bin/c3x
+        c3x --version
+
+    - name: Estimate
+      if: inputs.install-only != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        ARGS=(estimate --path "${{ inputs.path }}" --format "${{ inputs.format }}")
+        if [ "${{ inputs.budget }}" != "0" ]; then
+          ARGS+=(--budget "${{ inputs.budget }}")
+        fi
+        if [ -n "${{ inputs.currency }}" ]; then
+          ARGS+=(--currency "${{ inputs.currency }}")
+        fi
+        c3x "${ARGS[@]}"
+
+    - name: PR comment
+      if: inputs.install-only != 'true' && inputs.comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: c3x comment github --path "${{ inputs.path }}"

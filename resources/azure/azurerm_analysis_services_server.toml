@@ -1,0 +1,23 @@
+kind         = "azurerm_analysis_services_server"
+display_name = "Azure Analysis Services Server"
+provider     = "azure"
+
+[mappings.server]
+service        = "Azure Analysis Services"
+product_family = "Analytics"
+attribute_filters = [
+  { key = "skuName",   expr = 'default(sku, "S0")' },
+  { key = "meterName", expr = 'default(sku, "S0")' },
+]
+
+[[dimensions]]
+id       = "server_hours"
+label    = "Analysis Services instance"
+unit     = "hours"
+quantity = "monthly_hours()"
+rate     = 'price("server")'
+
+[fixture]
+attributes = { sku = "S0" }
+expected_monthly_cost = 591.3
+tolerance = 0.05

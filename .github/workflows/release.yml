@@ -1,0 +1,61 @@
+# Release pipeline. Triggered by v* tags:
+#
+#   git tag -a v0.1.0 -m "v0.1.0" && git push origin v0.1.0
+#
+# Produces: GitHub release with archives + checksums, multi-arch
+# GHCR images (amd64 + arm64), Homebrew cask push to
+# c3xdev/homebrew-c3x, cosign keyless signatures on the images.
+#
+# Required repo secrets:
+#   TAP_GITHUB_TOKEN — PAT with push access to c3xdev/homebrew-c3x
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write   # create GitHub releases
+  packages: write   # push images to GHCR
+  id-token: write   # cosign keyless OIDC signing
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # goreleaser changelog needs full history
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: GHCR login
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+      - name: Sign images (keyless)
+        run: |
+          cosign sign --yes ghcr.io/c3xdev/c3x:${GITHUB_REF_NAME#v}
+          cosign sign --yes ghcr.io/c3xdev/c3x:latest

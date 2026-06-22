@@ -1,0 +1,104 @@
+# Catalog drift detection.
+#
+# Runs the verifier in -strict mode against the live pricing
+# endpoint on a weekly schedule. -strict bumps DRIFT / NOFIX /
+# STALE buckets to fatal — so a 5%+ rate change on any LIVE
+# resource, a missing fixture on any new TOML, or a STATIC entry
+# that hasn't been re-verified in 6 months all fail the job.
+#
+# On failure, the workflow opens (or updates) a tracking issue
+# labelled "catalog-drift" so the maintainer sees it without
+# scanning Actions output.
+name: catalog-drift
+
+on:
+  schedule:
+    - cron: '0 14 * * 1' # Monday 14:00 UTC — early in the workweek
+  workflow_dispatch: {}  # manual trigger for ad-hoc checks
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Run verifier (strict)
+        id: verify
+        run: |
+          set +e
+          go run ./cmd/verify_catalog -strict 2>&1 | tee verify.log
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Surface drift summary
+        if: steps.verify.outputs.exit_code != '0'
+        run: |
+          echo "## Catalog drift detected" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^\[(DRIFT|STALE|NOFIX|ZERO|ERR)\]' verify.log | head -40 >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open / update tracking issue
+        if: steps.verify.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.readFileSync('verify.log', 'utf8');
+            const bad = log.split('\n')
+              .filter(l => /^\[(DRIFT|STALE|NOFIX|ZERO|ERR)\]/.test(l))
+              .slice(0, 50);
+            const body = [
+              '## Catalog drift detected',
+              '',
+              'The weekly `verify_catalog -strict` run reported issues against the live `pricing.c3x.dev` endpoint.',
+              '',
+              '```',
+              ...bad,
+              '```',
+              '',
+              'Triage:',
+              '- **[DRIFT]** — rate moved outside the snapshot tolerance band. Verify against the vendor\'s pricing page; update `expected_monthly_cost` in the TOML.',
+              '- **[STALE]** — STATIC rate hasn\'t been re-verified in 6 months. Confirm or refresh `last_verified` in the TOML.',
+              '- **[NOFIX]** — a TOML is missing its `[fixture]` block.',
+              '- **[ZERO]/[ERR]** — engine or upstream failure; investigate.',
+              '',
+              `_Workflow run: [${context.runId}](${context.payload.repository.html_url}/actions/runs/${context.runId})_`,
+            ].join('\n');
+
+            const title = 'Catalog drift detected (weekly verify run)';
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'catalog-drift',
+              state: 'open',
+            });
+            if (existing.length > 0) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing[0].number,
+                body,
+              });
+              core.info(`Updated existing issue #${existing[0].number}`);
+            } else {
+              const { data: created } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['catalog-drift'],
+              });
+              core.info(`Opened issue #${created.number}`);
+            }
+
+      - name: Exit with verifier status
+        if: steps.verify.outputs.exit_code != '0'
+        run: exit 1

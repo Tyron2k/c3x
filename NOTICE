@@ -1,0 +1,17 @@
+c3x — Cloud cost estimation CLI
+Copyright 2026 Andrea Cappelletti
+
+This product includes software developed by Andrea Cappelletti.
+
+Third-party Go libraries are imported via go.mod under their respective
+upstream licenses; see go.sum for exact versions. No third-party source
+code is vendored, copied, or otherwise embedded in this repository.
+
+Architectural notes
+-------------------
+
+The designs specific to c3x — the declarative TOML catalog, the
+pipeline-stage HCL evaluator, the four-state verifier
+(OK/STATIC/FREE/ZERO), the on-disk SQLite price cache, the
+recommendation rules, the --what-if override syntax — originated with
+this project.

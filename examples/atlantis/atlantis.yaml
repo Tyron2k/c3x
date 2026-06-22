@@ -1,0 +1,28 @@
+# Example atlantis.yaml wiring c3x as a post-plan step. See
+# docs/integrations/atlantis.md for the full explanation.
+version: 3
+projects:
+  - name: infra
+    dir: .
+    workflow: with-c3x
+
+workflows:
+  with-c3x:
+    plan:
+      steps:
+        - init
+        - plan
+        # Convert the binary plan to JSON so c3x can read it.
+        - run: terraform show -json $PLANFILE > $PLANFILE.json
+        # Estimate; --budget gates merges when the project total
+        # exceeds the threshold.
+        - run: c3x estimate --path $PLANFILE.json --budget 1000
+        # Post the markdown estimate alongside Atlantis's own
+        # plan-output comment.
+        - run: |
+            c3x comment github \
+              --owner "$BASE_REPO_OWNER" \
+              --repo  "$BASE_REPO_NAME" \
+              --pr    "$PULL_NUM" \
+              --path  "$PLANFILE.json" \
+              --token "$ATLANTIS_GH_TOKEN"

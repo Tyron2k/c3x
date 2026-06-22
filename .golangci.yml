@@ -1,0 +1,156 @@
+version: "2"
+run:
+  go: "1.23"
+linters:
+  default: none
+  enable:
+    - depguard
+    - errcheck
+    - gocritic
+    - gosec
+    - govet
+    - ineffassign
+    - revive
+    - staticcheck
+    - unused
+  settings:
+    depguard:
+      rules:
+        catalog:
+          files:
+            - '**/internal/catalog/**'
+          deny:
+            - pkg: github.com/c3xdev/c3x/internal/expr
+              desc: catalog may not import expr (loader is data-only)
+            - pkg: github.com/c3xdev/c3x/internal/pricing
+              desc: catalog may not import pricing
+            - pkg: github.com/c3xdev/c3x/internal/calculator
+              desc: catalog may not import calculator
+        config:
+          files:
+            - '**/internal/config/**'
+          deny:
+            - pkg: github.com/c3xdev/c3x/internal/catalog
+              desc: config may import only domain
+            - pkg: github.com/c3xdev/c3x/internal/expr
+              desc: config may import only domain
+            - pkg: github.com/c3xdev/c3x/internal/pricing
+              desc: config may import only domain
+            - pkg: github.com/c3xdev/c3x/internal/calculator
+              desc: config may import only domain
+            - pkg: github.com/c3xdev/c3x/internal/observability
+              desc: config may import only domain
+        domain:
+          files:
+            - '**/internal/domain/**'
+          deny:
+            - pkg: github.com/c3xdev/c3x/internal
+              desc: domain must not depend on other internal packages
+        expr:
+          files:
+            - '**/internal/expr/**'
+          deny:
+            - pkg: github.com/c3xdev/c3x/internal/catalog
+              desc: expr must not depend on catalog
+            - pkg: github.com/c3xdev/c3x/internal/pricing
+              desc: expr must not depend on pricing
+            - pkg: github.com/c3xdev/c3x/internal/calculator
+              desc: expr must not depend on calculator
+        observability:
+          files:
+            - '**/internal/observability/**'
+          deny:
+            - pkg: github.com/c3xdev/c3x/internal
+              desc: observability must not depend on other internal packages
+        parser:
+          files:
+            - '**/internal/parser/**'
+          deny:
+            - pkg: github.com/c3xdev/c3x/internal/catalog
+              desc: parser must not depend on catalog
+            - pkg: github.com/c3xdev/c3x/internal/expr
+              desc: parser must not depend on expr
+            - pkg: github.com/c3xdev/c3x/internal/pricing
+              desc: parser must not depend on pricing
+            - pkg: github.com/c3xdev/c3x/internal/calculator
+              desc: parser must not depend on calculator
+        pricing:
+          files:
+            - '**/internal/pricing/**'
+          deny:
+            - pkg: github.com/c3xdev/c3x/internal/catalog
+              desc: pricing must not depend on catalog
+            - pkg: github.com/c3xdev/c3x/internal/expr
+              desc: pricing must not depend on expr
+            - pkg: github.com/c3xdev/c3x/internal/calculator
+              desc: pricing must not depend on calculator
+    gocritic:
+      disabled-checks:
+        - hugeParam
+        - unnamedResult
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+    revive:
+      rules:
+        - name: exported
+        - name: var-naming
+        - name: package-comments
+        - name: indent-error-flow
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - gocritic
+          - gosec
+          - revive
+        path: _test\.go
+      # staticcheck QF* "quickfix" style suggestions are noise in
+      # test fixtures (tagged-switch rewrites of stub servers).
+      - linters: [staticcheck]
+        path: _test\.go
+        text: "QF1"
+      # depguard's layering rules are about production imports; an
+      # external test package importing its own package under test
+      # is the standard Go pattern.
+      - linters: [depguard]
+        path: _test\.go
+      # render.RenderX is the established public API of the render
+      # package; the stutter advice would churn every call site for
+      # zero clarity gain.
+      - linters: [revive]
+        path: internal/render/
+        text: "stutters"
+      # LegitimatelyFreeKinds maps resource kinds to prose reasons;
+      # gosec pattern-matches "aws_acm_certificate" as a credential.
+      - linters: [gosec]
+        path: internal/catalog/registry\.go
+        text: "G101"
+      # Archive extraction is guarded by withinDir (path traversal)
+      # and maxExtractBytes (decompression bombs); gosec can't see
+      # either guard pattern.
+      - linters: [gosec]
+        path: internal/parser/terraform/modulefetcher\.go
+        text: "G305|G110"
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - gofumpt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

@@ -1,0 +1,43 @@
+kind         = "azurerm_container_app"
+display_name = "Azure Container App"
+provider     = "azure"
+
+# Consumption-plan active usage: per vCPU-second + per GiB-second.
+# Idle pricing and the free grant (180k vCPU-s, 360k GiB-s) are not
+# modelled — always-on worst case.
+
+[mappings.vcpu]
+service        = "Azure Container Apps"
+product_family = "Compute"
+attribute_filters = [
+  { key = "skuName",   const = "Standard" },
+  { key = "meterName", const = "Standard vCPU Active Usage" },
+]
+
+[mappings.memory]
+service        = "Azure Container Apps"
+product_family = "Compute"
+attribute_filters = [
+  { key = "skuName",   const = "Standard" },
+  { key = "meterName", const = "Standard Memory Active Usage" },
+]
+
+[[dimensions]]
+id       = "vcpu_seconds"
+label    = "vCPU active usage"
+unit     = "vCPU-seconds"
+quantity = "default(template_container_cpu, 0.5) * monthly_hours() * 3600"
+rate     = 'price("vcpu")'
+
+[[dimensions]]
+id       = "memory_seconds"
+label    = "Memory active usage"
+unit     = "GiB-seconds"
+quantity = "default(template_container_memory_gb, 1) * monthly_hours() * 3600"
+rate     = 'price("memory")'
+
+[fixture]
+# 0.5 vCPU × 2.628M s × $0.000024 + 1 GiB × 2.628M s × $0.000003
+attributes = { template_container_cpu = 0.5, template_container_memory_gb = 1 }
+expected_monthly_cost = 39.42
+tolerance = 0.05
