@@ -4,10 +4,10 @@
 #
 # Produces: GitHub release with archives + checksums, multi-arch
 # GHCR images (amd64 + arm64), Homebrew cask push to
-# c3xdev/homebrew-c3x, cosign keyless signatures on the images.
+# c3xdev/homebrew-tap, cosign keyless signatures on the images.
 #
 # Required repo secrets:
-#   TAP_GITHUB_TOKEN — PAT with push access to c3xdev/homebrew-c3x
+#   HOMEBREW_RELEASE_TOKEN — PAT with push access to c3xdev/homebrew-tap
 name: release
 
 on:
@@ -53,9 +53,9 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          HOMEBREW_RELEASE_TOKEN: ${{ secrets.HOMEBREW_RELEASE_TOKEN }}
 
       - name: Sign images (keyless)
         run: |
-          cosign sign --yes ghcr.io/c3xdev/c3x:${GITHUB_REF_NAME#v}
-          cosign sign --yes ghcr.io/c3xdev/c3x:latest
+          cosign sign --yes "ghcr.io/c3xdev/c3x:${GITHUB_REF_NAME#v}"
+          cosign sign --yes "ghcr.io/c3xdev/c3x:latest"

@@ -73,14 +73,14 @@ changelog:
 # goreleaser v2. Casks are macOS-only; Linux users install via the
 # install script or `go install`. Pushes Casks/c3x.rb to
 # c3xdev/homebrew-tap so `brew install c3xdev/tap/c3x` works on macOS.
-# Requires a TAP_GITHUB_TOKEN secret with push access to the tap.
-# Skipped automatically on snapshots.
+# Requires the HOMEBREW_RELEASE_TOKEN secret (a PAT with push access
+# to the tap). Skipped automatically on snapshots.
 homebrew_casks:
   - name: c3x
     repository:
       owner: c3xdev
       name: homebrew-tap
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+      token: "{{ .Env.HOMEBREW_RELEASE_TOKEN }}"
     homepage: https://c3x.dev
     description: "Cloud cost estimation for Terraform & CloudFormation. No API key, no SaaS."
     license: Apache-2.0
