@@ -19,7 +19,7 @@ go install github.com/c3xdev/c3x/cmd/c3x@latest
 
 ```bash [Homebrew]
 # Pending the release tooling (ROADMAP G.3):
-brew install c3xdev/c3x/c3x
+brew install c3xdev/tap/c3x
 ```
 
 ```bash [Docker]

@@ -31,8 +31,8 @@ $ c3x estimate
 ## Install
 
 ```bash
-# Homebrew (macOS / Linux)
-brew install c3xdev/c3x/c3x
+# Homebrew (macOS)
+brew install c3xdev/tap/c3x
 
 # Install script — detects your OS/arch, verifies the checksum
 curl -fsSL https://c3x.dev/install.sh | sh
