@@ -4,10 +4,5 @@
 *.test
 *.out
 
-# Docs site
-docs-site/node_modules/
-docs-site/.vitepress/dist/
-docs-site/.vitepress/cache/
-
 # OS noise
 .DS_Store
