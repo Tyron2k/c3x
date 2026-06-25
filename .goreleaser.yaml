@@ -86,13 +86,18 @@ homebrew_casks:
     license: Apache-2.0
 
 # Docker images: dockers_v2 builds the multi-arch manifest natively
-# (no per-arch image + manifest stitching needed).
+# (no per-arch image + manifest stitching needed). Published to both
+# GHCR and Docker Hub; the Docker Hub coordinates come from the
+# DOCKER_ORG / DOCKER_REPOSITORY release secrets (the workflow logs in
+# to both registries before this runs). On a local snapshot without
+# those env vars set, the docker step is skipped via --skip=docker.
 dockers_v2:
   - id: c3x
     ids:
       - c3x
     images:
       - "ghcr.io/c3xdev/c3x"
+      - "docker.io/{{ .Env.DOCKER_ORG }}/{{ .Env.DOCKER_REPOSITORY }}"
     tags:
       - "{{ .Version }}"
       - "latest"

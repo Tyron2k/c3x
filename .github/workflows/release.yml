@@ -2,12 +2,15 @@
 #
 #   git tag -a v0.1.0 -m "v0.1.0" && git push origin v0.1.0
 #
-# Produces: GitHub release with archives + checksums, multi-arch
-# GHCR images (amd64 + arm64), Homebrew cask push to
-# c3xdev/homebrew-tap, cosign keyless signatures on the images.
+# Produces: GitHub release with archives + checksums, multi-arch images
+# (amd64 + arm64) pushed to BOTH GHCR (ghcr.io/c3xdev/c3x) and Docker
+# Hub (docker.io/$DOCKER_ORG/$DOCKER_REPOSITORY), Homebrew cask push to
+# c3xdev/homebrew-tap, cosign keyless signatures on all images.
 #
 # Required repo secrets:
 #   HOMEBREW_RELEASE_TOKEN — PAT with push access to c3xdev/homebrew-tap
+#   DOCKER_USERNAME / DOCKER_PASSWORD — Docker Hub push credentials
+#   DOCKER_ORG / DOCKER_REPOSITORY — Docker Hub image coordinates
 name: release
 
 on:
@@ -42,6 +45,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Docker Hub login
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
@@ -54,8 +64,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_RELEASE_TOKEN: ${{ secrets.HOMEBREW_RELEASE_TOKEN }}
+          # Docker Hub image coordinates (docker.io/$ORG/$REPO), consumed
+          # by the dockers_v2 image template in .goreleaser.yaml.
+          DOCKER_ORG: ${{ secrets.DOCKER_ORG }}
+          DOCKER_REPOSITORY: ${{ secrets.DOCKER_REPOSITORY }}
 
       - name: Sign images (keyless)
+        env:
+          DOCKER_ORG: ${{ secrets.DOCKER_ORG }}
+          DOCKER_REPOSITORY: ${{ secrets.DOCKER_REPOSITORY }}
         run: |
-          cosign sign --yes "ghcr.io/c3xdev/c3x:${GITHUB_REF_NAME#v}"
+          ver="${GITHUB_REF_NAME#v}"
+          cosign sign --yes "ghcr.io/c3xdev/c3x:${ver}"
           cosign sign --yes "ghcr.io/c3xdev/c3x:latest"
+          cosign sign --yes "docker.io/${DOCKER_ORG}/${DOCKER_REPOSITORY}:${ver}"
+          cosign sign --yes "docker.io/${DOCKER_ORG}/${DOCKER_REPOSITORY}:latest"
