@@ -172,8 +172,11 @@ func runEstimate(
 		return fmt.Errorf("loading catalog: %w", err)
 	}
 
+	// Resolve the default cache path for both online (write-through
+	// cache) and offline (read the warmed cache). Only --no-cache opts
+	// out entirely.
 	cachePath := resolved.CachePath
-	if cachePath == "" && !resolved.NoCache && !resolved.Offline {
+	if cachePath == "" && !resolved.NoCache {
 		defaultPath, perr := config.UserCachePath()
 		if perr != nil {
 			return fmt.Errorf("resolving default cache path: %w", perr)

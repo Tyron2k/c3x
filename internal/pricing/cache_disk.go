@@ -18,8 +18,8 @@ import (
 )
 
 // DefaultCacheTTL is how long a disk-cached price is considered fresh.
-// Seven days matches v2 Rust's value and is roughly the cadence at
-// which AWS/Azure/GCP move their public catalogs.
+// Seven days is roughly the cadence at which AWS/Azure/GCP move their
+// public catalogs.
 const DefaultCacheTTL = 7 * 24 * time.Hour
 
 // DiskCache wraps a Source with a SQLite-backed cache. Hits within TTL
@@ -143,6 +143,61 @@ func (c *DiskCache) write(key string, price decimal.Decimal, source, summary str
 		   query_summary = excluded.query_summary`,
 		key, price.String(), source, c.now().Unix(), summary,
 	)
+}
+
+// CacheEntry is one resolved (query, rate) pair for bulk warming via
+// [DiskCache.PutBatch]. Source is the price-source label to record
+// (synced prices are real upstream prices, so callers pass
+// domain.PriceSourceLive).
+type CacheEntry struct {
+	Query  Query
+	Rate   decimal.Decimal
+	Source string
+}
+
+// PutBatch writes entries in a single transaction and returns the
+// number written. Existing keys are overwritten. This is the warm path
+// used by [Sync]: one transaction for thousands of rows keeps the
+// SQLite write cost flat versus per-row autocommit.
+func (c *DiskCache) PutBatch(entries []CacheEntry) (int, error) {
+	if len(entries) == 0 {
+		return 0, nil
+	}
+	tx, err := c.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin warm tx: %w", err)
+	}
+	stmt, err := tx.Prepare(
+		`INSERT INTO prices (cache_key, price, source, fetched_at, query_summary)
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(cache_key) DO UPDATE SET
+		   price = excluded.price,
+		   source = excluded.source,
+		   fetched_at = excluded.fetched_at,
+		   query_summary = excluded.query_summary`,
+	)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, fmt.Errorf("prepare warm stmt: %w", err)
+	}
+	defer func() { _ = stmt.Close() }()
+
+	now := c.now().Unix()
+	for i := range entries {
+		e := &entries[i]
+		s := e.Source
+		if s == "" {
+			s = domain.PriceSourceLive
+		}
+		if _, err := stmt.Exec(queryKey(e.Query), e.Rate.String(), s, now, summary(e.Query)); err != nil {
+			_ = tx.Rollback()
+			return 0, fmt.Errorf("warm write: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit warm tx: %w", err)
+	}
+	return len(entries), nil
 }
 
 // Stats describes the disk cache state. `Live` and `Stale` partition

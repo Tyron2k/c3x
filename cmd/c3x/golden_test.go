@@ -40,6 +40,11 @@ func TestEstimateGolden(t *testing.T) {
 		name := name
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			// Isolate the cache dir too: `--offline` reads the on-disk
+			// cache (warmed by `c3x pricing sync`), so an unisolated test
+			// would pick up the developer's real cache. An empty temp
+			// cache keeps offline deterministic ($0 stub) for the golden.
+			t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
 			repoRoot, err := projectRoot()
 			if err != nil {

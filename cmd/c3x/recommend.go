@@ -95,8 +95,10 @@ non-prod, GCP pd-standard → pd-balanced.`,
 				return fmt.Errorf("loading catalog: %w", err)
 			}
 
+			// Default cache path for both online and offline (read the
+			// warmed cache); only --no-cache opts out.
 			pricePath := resolved.CachePath
-			if pricePath == "" && !resolved.NoCache && !resolved.Offline {
+			if pricePath == "" && !resolved.NoCache {
 				def, err := config.UserCachePath()
 				if err != nil {
 					return fmt.Errorf("resolving default cache path: %w", err)

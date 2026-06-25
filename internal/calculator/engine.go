@@ -272,25 +272,9 @@ func (e *Engine) buildQuery(
 		Unit:             m.Unit,
 	}
 	if q.PurchaseOption == "" {
-		q.PurchaseOption = defaultPurchaseOption(def.Provider)
+		q.PurchaseOption = pricing.DefaultPurchaseOption(def.Provider)
 	}
 	return q, nil
-}
-
-// defaultPurchaseOption returns the per-provider default purchaseOption
-// filter applied when a mapping doesn't override it. The values match
-// what the upstream catalogue at pricing.c3x.dev uses.
-func defaultPurchaseOption(provider string) string {
-	switch provider {
-	case "aws":
-		return "on_demand"
-	case "azure":
-		return "Consumption"
-	case "gcp":
-		return "OnDemand"
-	default:
-		return "on_demand"
-	}
 }
 
 // resolveFilter turns an AttributeFilter into a concrete value string.

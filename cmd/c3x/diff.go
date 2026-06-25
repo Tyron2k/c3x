@@ -154,8 +154,10 @@ func computeCurrent(
 	if err != nil {
 		return domain.Estimate{}, fmt.Errorf("loading catalog: %w", err)
 	}
+	// Default cache path for both online (write-through) and offline
+	// (read the warmed cache); only --no-cache opts out.
 	pricePath := resolved.CachePath
-	if pricePath == "" && !resolved.NoCache && !resolved.Offline {
+	if pricePath == "" && !resolved.NoCache {
 		def, err := config.UserCachePath()
 		if err != nil {
 			return domain.Estimate{}, fmt.Errorf("resolving default cache path: %w", err)

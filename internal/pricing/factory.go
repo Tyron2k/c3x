@@ -44,6 +44,15 @@ type ChainOptions struct {
 // it manually instead of using BuildChain.
 func BuildChain(opts ChainOptions) (Source, error) {
 	if opts.Offline {
+		// Offline reads a cache previously warmed by `c3x pricing sync`:
+		// no network, no expiry. A missing or unwarmed cache degrades to
+		// the bare stub (every rate $0) rather than erroring — the user
+		// simply hasn't synced yet, and the run still parses end-to-end.
+		if opts.CachePath != "" {
+			if disk, err := OpenDiskCache(opts.CachePath, NewStub(), WithTTL(-1)); err == nil {
+				return wrapWithFX(NewOfflineSource(disk), opts.Currency), nil
+			}
+		}
 		return wrapWithFX(NewStub(), opts.Currency), nil
 	}
 	if opts.Endpoint == "" {
