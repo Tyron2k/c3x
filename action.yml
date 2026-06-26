@@ -15,6 +15,19 @@
 #     with:
 #       install-only: true
 #   - run: c3x estimate --path .
+#
+# Branded comments (post as c3x-cloud[bot] instead of github-actions):
+# install the c3x-cloud GitHub App on the repo and grant id-token in the
+# workflow, then set branded-comments: true:
+#
+#   permissions:
+#     pull-requests: write
+#     id-token: write          # required to mint the branded token
+#   steps:
+#     - uses: c3xdev/c3x@v0
+#       with:
+#         path: .
+#         branded-comments: true
 name: c3x
 description: >-
   Cloud cost estimation for Terraform & CloudFormation. Installs the
@@ -37,6 +50,16 @@ inputs:
   comment:
     description: Post/update the cost comment on the current PR (needs pull-requests write).
     default: "true"
+  branded-comments:
+    description: >-
+      Post the PR comment as the c3x-cloud[bot] instead of github-actions.
+      Requires the c3x-cloud GitHub App installed on the repo and
+      'permissions: id-token: write' in the workflow. Falls back to the
+      default github-actions identity if either is missing.
+    default: "false"
+  token-service:
+    description: C3X Cloud token service URL (advanced; default token.c3x.dev).
+    default: "https://token.c3x.dev"
   budget:
     description: Fail when the monthly total exceeds this amount (0 disables).
     default: "0"
@@ -84,5 +107,39 @@ runs:
       if: inputs.install-only != 'true' && inputs.comment == 'true' && github.event_name == 'pull_request'
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ github.token }}
-      run: c3x comment github --path "${{ inputs.path }}"
+        GH_DEFAULT_TOKEN: ${{ github.token }}
+        BRANDED: ${{ inputs.branded-comments }}
+        TOKEN_SERVICE: ${{ inputs.token-service }}
+        OIDC_AUDIENCE: c3x-cloud
+      run: |
+        set -euo pipefail
+        TOKEN="$GH_DEFAULT_TOKEN"
+        if [ "$BRANDED" = "true" ]; then
+          # Any failure here is non-fatal: fall back to the default
+          # github-actions identity rather than dropping the comment.
+          branded=""
+          err=""
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+            oidc=$(curl -fsSL -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}" 2>/dev/null | jq -r '.value // empty' || true)
+            if [ -n "$oidc" ]; then
+              resp=$(curl -fsS -X POST "$TOKEN_SERVICE" \
+                -H "Authorization: Bearer ${oidc}" \
+                -H 'Content-Type: application/json' \
+                -d "{\"repo\":\"${GITHUB_REPOSITORY}\"}" 2>/dev/null || true)
+              branded=$(printf '%s' "$resp" | jq -r '.token // empty')
+              err=$(printf '%s' "$resp" | jq -r '.error // empty')
+            else
+              err="could not obtain OIDC token"
+            fi
+          else
+            err="workflow is missing 'permissions: id-token: write'"
+          fi
+          if [ -n "$branded" ]; then
+            TOKEN="$branded"
+            echo "Posting comment as c3x-cloud[bot]"
+          else
+            echo "::warning::branded comment unavailable (${err:-unknown}); posting as github-actions instead"
+          fi
+        fi
+        GITHUB_TOKEN="$TOKEN" c3x comment github --path "${{ inputs.path }}"
