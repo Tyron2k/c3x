@@ -6,6 +6,10 @@
 # resource, a missing fixture on any new TOML, or a STATIC entry
 # that hasn't been re-verified in 6 months all fail the job.
 #
+# It also runs the price-spread audit as an advisory step (never
+# fatal) so a newly under-specified mapping — the over-pricing class
+# of bug — surfaces in the run summary before it ships.
+#
 # On failure, the workflow opens (or updates) a tracking issue
 # labelled "catalog-drift" so the maintainer sees it without
 # scanning Actions output.
@@ -36,6 +40,23 @@ jobs:
           set +e
           go run ./cmd/verify_catalog -strict 2>&1 | tee verify.log
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Run over-pricing audit (informational)
+        # Re-runs the price-spread detector that found the catalog
+        # over-pricing bugs. Advisory only — many findings are benign
+        # (spot vs on-demand, tiered/region spreads), so it never fails
+        # the job, but a NEW wide-spread mapping surfaces here weekly
+        # before it ships a wrong estimate.
+        run: |
+          set +e
+          go run ./cmd/verify_catalog --audit 2>&1 \
+            | sed -n '/^=== AUDIT:/,$p' | tee audit.log
+          {
+            echo "## Over-pricing audit (advisory)"
+            echo '```'
+            cat audit.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Surface drift summary
         if: steps.verify.outputs.exit_code != '0'
