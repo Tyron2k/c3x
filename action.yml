@@ -1,13 +1,27 @@
 # Composite GitHub Action: install c3x and (optionally) run an
 # estimate + PR comment in one step.
 #
+# On a pull request the comment shows the cost DELTA versus the base
+# branch ("Total: $533/mo -> $1,038/mo +$505") — the Action estimates
+# the base branch automatically. On a push (no base) it shows the
+# absolute total.
+#
 # Usage (after the repo is public):
 #
 #   - uses: c3xdev/c3x@v0
 #     with:
 #       path: plan.json          # or a Terraform directory
 #       comment: true            # post/update the PR comment
-#       budget: "1000"           # optional gate
+#       budget: "1000"           # gate on the absolute monthly total
+#
+# Gate on the per-PR increase (independent of budget). budget-delta
+# fails the job when this PR raises the monthly total by more than the
+# given amount versus the base branch:
+#
+#   - uses: c3xdev/c3x@v0
+#     with:
+#       path: .
+#       budget-delta: "50"       # fail if this PR adds > $50/mo
 #
 # Or install-only (run c3x yourself afterwards):
 #
@@ -31,8 +45,8 @@
 name: c3x
 description: >-
   Cloud cost estimation for Terraform & CloudFormation. Installs the
-  c3x CLI and optionally runs an estimate, posts a PR comment, and
-  enforces a budget gate. No API key required.
+  c3x CLI, posts the per-PR cost delta as a comment, and enforces
+  budget / budget-delta gates. No API key required.
 branding:
   icon: dollar-sign
   color: blue
